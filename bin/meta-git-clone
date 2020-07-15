@@ -7,16 +7,22 @@ const getMetaFile = require('get-meta-file');
 const path = require('path');
 const program = require('commander');
 const util = require('util');
+const assertUsage = require('../lib/assertUsage');
 
-if (!process.argv[2] || process.argv[2] === '--help')
-  return console.log(`\n  usage:\n\n    meta git clone <metaRepoUrl>\n`);
 
 const repoUrlUnescaped = process.argv[2] === 'blank' ? process.argv[3] : process.argv[2];
 const repoUrl = repoUrlUnescaped.replace(/[;|]/gi, ''); // Escape potential harmful characters to fix a Command Execution
 
-const dirname = path.basename(repoUrl).replace('.git', '');
+const args = require('minimist')(process.argv, {
+  alias: {b:'branch'},
+  default: { branch: 'master'}
+});
+const repoBranch = args['branch'];
 
-console.log(`meta git cloning into \'${repoUrl}\' at ${dirname}`);
+if (process.argv[2] === '--help') return console.log(usage);
+
+if (!assertUsage('meta git clone', usage, { allow: /.*/ }))
+  return console.log(usage);
 
 exec({ cmd: `git clone ${repoUrl} ${dirname}`, displayDir: dirname }, (err, result) => {
   if (err) throw err;
@@ -50,6 +56,20 @@ exec({ cmd: `git clone ${repoUrl} ${dirname}`, displayDir: dirname }, (err, resu
       },
       err => {
         if (err) throw err;
+
+        if (repoBranch !== 'master') {
+          console.log(`git checkout ${repoBranch}`);
+          exec(
+            {
+              command: `git checkout ${repoBranch}`,
+              displayDir: newDir,
+            },
+            cb,
+            err => {
+              throw err;
+            }
+          );
+        }
 
         child();
       }
