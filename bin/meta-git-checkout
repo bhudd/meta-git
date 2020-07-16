@@ -2,6 +2,8 @@
 
 const assertUsage = require('../lib/assertUsage');
 const metaLoop = require('meta-loop');
+const getMetaFile = require('get-meta-file');
+const exec = require('child_process').exec;
 
 const usage = `
 usage: 
@@ -18,3 +20,55 @@ if (process.argv[2] === '--help') return console.log(usage);
 if (!assertUsage('meta git checkout', usage, { allow: /.*/ })) return console.log(usage);
 
 metaLoop(`git checkout ${process.argv.slice(2).join(' ')}`);
+
+
+// figure out what branches changed in our repos
+
+// Load the ".meta" module.
+const meta = getMetaFile({ confirmInMetaRepo: true, warn: false });
+if (!meta) 
+{
+       console.log('no meta file?')
+       process.exit(1);
+}
+
+const projects = meta.projects;
+const folders = Object.keys(projects);
+
+var folder = null;
+
+function child(err) {
+  if(err) throw err;
+
+  if(!folders.length)
+  {
+     console.log('updating .meta file');
+     getMetaFile.save(meta);
+     return 0;
+  }
+
+  folder = folders.pop();
+
+  console.log(`executing in folder ${folder}`);
+
+  exec(
+    `git symbolic-ref --short -q HEAD`,
+    {
+       cwd: folder,
+       stdio: [0, 1, 2]
+    },
+    (err, stdout, stderr) => {
+       if(err) throw err;
+
+       if(stdout.length)
+       {
+         const branch = stdout.trim();
+         console.log(`saving branch ${branch} to ${folder}`)
+         meta.branches[folder] = branch;
+       }
+       child();
+    }
+  );
+}
+
+child();
